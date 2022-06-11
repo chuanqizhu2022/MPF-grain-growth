@@ -12,7 +12,7 @@ using namespace cimg_library;
 
 #define NDX 64
 #define NDY 64
-#define NDZ 64
+#define NDZ 1
 
 #define N 2
 
@@ -129,7 +129,7 @@ int main()
 
 	nstep = 2001;
 	pstep = 200;
-	dtime = 5.0;
+	dtime = 1.0;
 	temp = 1000.0;
 	L = 2000.0;
 	vm0 = 7.0e-6;
