@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 #include <time.h>
 #include <math.h>
 #include "CImg.h" //CImg ライブラリ（描画用）使用のためのヘッダ
@@ -29,7 +30,6 @@ double RR = 8.3145;
 double ****phi, ****phi2;
 int ***phiNum, ****phiIdx;
 double **aij, **wij, **mij, **fij;
-double **anij, **thij, **vpij, **etaij;
 
 CImg<unsigned char> phi_fldxy(NDX, NDY, 1, 3);
 char outFilePhi_xy[64];
@@ -51,9 +51,10 @@ double sum1, sum2, sum3; //各種の和の作業変数
 double pddtt;			 //フェーズフィールドの時間変化率
 
 double gamma0; //粒界エネルギ密度
-double delta;  //粒界幅（差分ブロック数にて表現）
-double mobi;   //粒界の易動度
-double vm0;	   //モル体積
+double dT, dS;
+double delta; //粒界幅（差分ブロック数にて表現）
+double mobi;  //粒界の易動度
+double vm0;	  //モル体積
 
 double epsilon0;
 double termiikk, termjjkk;
@@ -111,37 +112,34 @@ int main()
 	wij = new double *[N];
 	mij = new double *[N];
 	fij = new double *[N];
-	anij = new double *[N];
-	thij = new double *[N];
-	vpij = new double *[N];
-	etaij = new double *[N];
 	for (ni = 0; ni <= nm; ni++)
 	{
 		aij[ni] = new double[N];
 		wij[ni] = new double[N];
 		mij[ni] = new double[N];
 		fij[ni] = new double[N];
-		anij[ni] = new double[N];
-		thij[ni] = new double[N];
-		vpij[ni] = new double[N];
-		etaij[ni] = new double[N];
 	}
 
+	// Computation parameters
 	nstep = 2001;
 	pstep = 200;
-	dtime = 1.0;
-	temp = 1000.0;
-	L = 2000.0;
-	vm0 = 7.0e-6;
-	delta = 7.0;
-	mobi = 1.0;
+	dx = 2.0e-8;	// m
+	dtime = 1.0e-5; // s
+	delta = 7.0 * dx;
 
-	dx = L / 100.0 * 1.0e-9;			 //差分プロック１辺の長さ(m)
-	gamma0 = 0.5 * vm0 / RR / temp / dx; //粒界エネルギ密度（0.5J/m^2）を無次元化x
-	A0 = 8.0 * delta * gamma0 / PI / PI; //勾配エネルギー係数[式(4.40)]
-	W0 = 4.0 * gamma0 / delta;			 //ペナルティー項の係数[式(4.40)]
-	M0 = mobi * PI * PI / (8.0 * delta); //粒界の易動度[式(4.40)]
-	F0 = 100.0 / RR / temp;				 //粒界移動の駆動力
+	// Silicon
+	gamma0 = 0.5;	// J/m2
+	dS = 2.4e6;		// latent heat divided by melting point [J/(m3K)]
+	dT = 3.0;		// K
+	mobi = 4.0e-12; // the velocity of interface should be 30 um/s according to experiment observations
+
+	// Model parameters
+	A0 = 8.0 * delta * gamma0 / PI / PI;
+	W0 = 4.0 * gamma0 / delta;
+	M0 = mobi * PI * PI / (8.0 * delta);
+	F0 = dT * dS;
+
+	std::cout << "Stability criteria: " << M0 * A0 * dtime / dx / dx << std::endl;
 
 	for (ii = 0; ii <= nm; ii++)
 	{
@@ -151,14 +149,9 @@ int main()
 			aij[ii][jj] = A0;
 			mij[ii][jj] = M0;
 			fij[ii][jj] = 0.0;
-			anij[ii][jj] = 0;
-			thij[ii][jj] = 0.0;
-			vpij[ii][jj] = 0.0;
-			etaij[ii][jj] = 0.0;
 			if ((ii == 0) || (jj == 0))
 			{
 				fij[ii][jj] = F0;
-				anij[ii][jj] = 1;
 			}
 			if (ii < jj)
 			{
@@ -170,7 +163,6 @@ int main()
 				aij[ii][jj] = 0.0;
 				mij[ii][jj] = 0.0;
 				fij[ii][jj] = 0.0;
-				anij[ii][jj] = 0;
 			}
 		}
 	}
@@ -207,35 +199,6 @@ start:;
 		}
 		sprintf(outFilePhi_xy, "figures/phi/2dxy%d.png", istep);
 		phi_fldxy.save_jpeg(outFilePhi_xy);
-
-		FILE *stream;
-		char buffer[30];
-		sprintf(buffer, "data/phi/3d%d.vtk", istep);
-		stream = fopen(buffer, "a");
-
-		fprintf(stream, "# vtk DataFile Version 1.0\n");
-		fprintf(stream, "phi_%d.vtk\n", istep);
-		fprintf(stream, "ASCII\n");
-		fprintf(stream, "DATASET STRUCTURED_POINTS\n");
-		fprintf(stream, "DIMENSIONS %d %d %d\n", NDX, NDY, NDZ);
-		fprintf(stream, "ORIGIN 0.0 0.0 0.0\n");
-		fprintf(stream, "ASPECT_RATIO 1.0 1.0 1.0\n");
-		fprintf(stream, "\n");
-		fprintf(stream, "POINT_DATA %d\n", NDX * NDY * NDZ);
-		fprintf(stream, "SCALARS scalars float\n");
-		fprintf(stream, "LOOKUP_TABLE default\n");
-
-		for (i = 0; i <= ndmx; i++)
-		{
-			for (j = 0; j <= ndmy; j++)
-			{
-				for (k = 0; k <= ndmz; k++)
-				{
-					fprintf(stream, "%e\n", phi[1][i][j][k]);
-				}
-			}
-		}
-		fclose(stream);
 	}
 
 	for (i = 0; i <= ndmx; i++)
@@ -346,13 +309,13 @@ start:;
 							kk = phiIdx[n3][i][j][k];
 
 							// calculate the interface normal and deirivatives of the phase field
-							phidx = (phi[kk][ip][j][k] - phi[kk][im][j][k]) / 2.0;
-							phidy = (phi[kk][i][jp][k] - phi[kk][i][jm][k]) / 2.0;
-							phidz = (phi[kk][i][j][kp] - phi[kk][i][j][km]) / 2.0;
+							phidx = (phi[kk][ip][j][k] - phi[kk][im][j][k]) / 2.0 / dx;
+							phidy = (phi[kk][i][jp][k] - phi[kk][i][jm][k]) / 2.0 / dx;
+							phidz = (phi[kk][i][j][kp] - phi[kk][i][j][km]) / 2.0 / dx;
 
-							phidxx = (phi[kk][ip][j][k] + phi[kk][im][j][k] - 2.0 * phi[kk][i][j][k]); //フェーズフィールドの空間２階微分
-							phidyy = (phi[kk][i][jp][k] + phi[kk][i][jm][k] - 2.0 * phi[kk][i][j][k]);
-							phidzz = (phi[kk][i][j][kp] + phi[kk][i][j][km] - 2.0 * phi[kk][i][j][k]);
+							phidxx = (phi[kk][ip][j][k] + phi[kk][im][j][k] - 2.0 * phi[kk][i][j][k]) / dx / dx; //フェーズフィールドの空間２階微分
+							phidyy = (phi[kk][i][jp][k] + phi[kk][i][jm][k] - 2.0 * phi[kk][i][j][k]) / dx / dx;
+							phidzz = (phi[kk][i][j][kp] + phi[kk][i][j][km] - 2.0 * phi[kk][i][j][k]) / dx / dx;
 
 							termiikk = aij[ii][kk] * (phidxx + phidyy + phidzz);
 

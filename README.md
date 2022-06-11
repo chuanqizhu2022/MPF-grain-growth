@@ -2,7 +2,7 @@
 
 This is a basic multi-phase-field model that can simulate the growth of grains .
 
-You can extend this model based on your needs.
+You can change the parameters and extend this model based on your needs.
 
 Dowdload the code by enter the terminal command in your folder:
 
